@@ -8,7 +8,7 @@
 <div id="authModal" class="welcome hidden" style="background:#080808"><div class="card" style="width:min(420px,90vw);text-align:left"><h2 id="authTitle">Welcome back</h2><input id="authEmail" class="field" type="email" placeholder="Email"><input id="authPassword" class="field" type="password" placeholder="Password"><input id="authName" class="field" placeholder="Display name (for sign up)"><div class="row"><button class="gold" id="authSubmit">Sign in</button><button id="switchAuth">Create account</button><button id="closeAuth">Close</button></div><p class="muted" id="authMessage"></p></div></div>
 <script type="module">
 import {createClient} from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-const SUPABASE_URL=window.TTR_SUPABASE_URL||'',SUPABASE_ANON_KEY=window.TTR_SUPABASE_ANON_KEY||'';
+const SUPABASE_URL='https://ohkuzrcsekzebagwuniw.supabase.co',SUPABASE_ANON_KEY='sb_publishable_pLl2MB3T01QO6sKOvKmJLg_ICGzTk6V';
 const supabase=SUPABASE_URL&&SUPABASE_ANON_KEY?createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
 const $=s=>document.querySelector(s);let user=null,posts=[],mode='signin',currentFeed='forYou';
 $('#enter').onclick=()=>{$('#welcome').classList.add('hidden');$('#app').style.display='block';$('#nav').classList.remove('hidden');loadPosts();};
