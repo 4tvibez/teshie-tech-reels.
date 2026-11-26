@@ -64,3 +64,21 @@ insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) v
 create policy "public read reels" on storage.objects for select using(bucket_id='reels');
 create policy "authenticated upload reels" on storage.objects for insert to authenticated with check(bucket_id='reels' and (storage.foldername(name))[1]=auth.uid()::text);
 create policy "owner delete reels" on storage.objects for delete to authenticated using(bucket_id='reels' and (storage.foldername(name))[1]=auth.uid()::text);
+
+
+-- Video comments
+create table if not exists public.comments (
+ id uuid primary key default gen_random_uuid(),
+ video_id uuid not null references public.videos(id) on delete cascade,
+ user_id uuid not null references public.profiles(id) on delete cascade,
+ content text not null check (char_length(trim(content)) between 1 and 500),
+ created_at timestamptz default now()
+);
+create index if not exists comments_video_created_idx on public.comments(video_id, created_at);
+alter table public.comments enable row level security;
+drop policy if exists "comments readable" on public.comments;
+create policy "comments readable" on public.comments for select using(true);
+drop policy if exists "users post own comments" on public.comments;
+create policy "users post own comments" on public.comments for insert to authenticated with check(auth.uid()=user_id);
+drop policy if exists "users delete own comments" on public.comments;
+create policy "users delete own comments" on public.comments for delete to authenticated using(auth.uid()=user_id);
