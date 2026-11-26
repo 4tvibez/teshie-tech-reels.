@@ -52,7 +52,7 @@ function renderFeed(){
   overlay.innerHTML='<div class="creator"><span class="avatar">✦</span><span>@'+esc(p.profiles?.username||'creator')+'</span></div><p>'+esc(p.caption||'')+'</p><span class="tag">'+(p.tags||[]).map(t=>'#'+esc(t)).join(' ')+'</span>';
   const a=document.createElement('div');a.className='actions';
   const saved=JSON.parse(localStorage.getItem('ttr_saved')||'[]').includes(p.id);
-  a.innerHTML='<button data-act="like">♡<small>Like</small></button><button data-act="share">↗<small>Share</small></button><button data-act="comments">▤<small>Comments</small></button><button data-act="save">'+(saved?'★':'☆')+'<small>'+(saved?'Saved':'Save')+'</small></button><button data-act="tag">#<small>Tags</small></button>'+(user?.id===p.user_id?'<button data-act="delete">⌫<small>Delete</small></button>:'<button data-act="follow">'+(followingIds.has(p.user_id)?'✓':'＋')+'<small>'+(followingIds.has(p.user_id)?'Following':'Follow')+'</small></button>');
+  a.innerHTML='<button data-act="like">♡<small>Like</small></button><button data-act="share">↗<small>Share</small></button><button data-act="comments">▤<small>Comments</small></button><button data-act="save">'+(saved?'★':'☆')+'<small>'+(saved?'Saved':'Save')+'</small></button><button data-act="tag">#<small>Tags</small></button>'+(user?.id===p.user_id?'<button data-act="delete">⌫<small>Delete</small></button>':'<button data-act="follow">'+(followingIds.has(p.user_id)?'✓':'＋')+'<small>'+(followingIds.has(p.user_id)?'Following':'Follow')+'</small></button>');
   a.onclick=e=>action(e,p);
   const hint=document.createElement('div');hint.className='tap-hint';hint.textContent='Ⅱ';
   let lastTap=0;
