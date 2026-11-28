@@ -97,7 +97,34 @@ if(supabase){const {data}=await supabase.auth.getSession();user=data.session?.us
 $('#publish').onclick=async()=>{if(!supabase){notify('Connect Supabase first. See README.');return}if(!user){openAuth();return}const file=$('#videoFile').files[0];if(!file){notify('Choose a video first');return}if(file.size>100*1024*1024){notify('Please choose a video under 100 MB');return}$('#uploadStatus').textContent='Uploading...';const path=user.id+'/'+Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');let {error}=await supabase.storage.from('reels').upload(path,file,{contentType:file.type});if(error){$('#uploadStatus').textContent=error.message;return}const {data:pub}=supabase.storage.from('reels').getPublicUrl(path);const tags=$('#hashtags').value.split(/[ ,#]+/).filter(Boolean);({error}=await supabase.from('videos').insert({user_id:user.id,video_url:pub.publicUrl,caption:$('#caption').value,tags}));$('#uploadStatus').textContent=error?.message||'Video published!';if(!error){$('#videoFile').value='';$('#caption').value='';$('#hashtags').value='';showPage('feed');loadPosts()}};
 function showPage(page){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));if(page==='feed'){$('#feed').classList.remove('hidden');$('#feed').style.display='block'}else{$('#'+page).classList.remove('hidden');$('#feed').style.display='none'}document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));}
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelectorAll('[data-feed]').forEach(b=>b.onclick=()=>{currentFeed=b.dataset.feed;document.querySelectorAll('[data-feed]').forEach(x=>x.classList.toggle('active',x===b));loadPosts()});
-$('#search').oninput=async()=>{if(!supabase)return;const term=$('#search').value.replace(/^#/,'');const {data}=await supabase.from('videos').select('id,caption,tags,video_url,profiles(username)').or('caption.ilike.%'+term+'%,tags.cs.{'+term+'}').limit(20);$('#discoverResults').innerHTML=(data||[]).map(x=>'<div class="card">@'+esc(x.profiles?.username||'creator')+' — '+esc(x.caption||'')+'</div>').join('')||'<p class="muted">No matches</p>'};
+let discoverPosts=[];
+$('#search').oninput=async()=>{
+ if(!supabase)return;
+ const term=$('#search').value.trim().replace(/^#/,'');
+ if(!term){discoverPosts=[];$('#discoverResults').innerHTML='<p class="muted">Search for creators, captions or hashtags to find videos.</p>';return}
+ $('#discoverResults').innerHTML='<p class="muted">Searching videos...</p>';
+ const {data,error}=await supabase.from('videos').select('id,user_id,video_url,caption,tags,created_at,profiles(id,username,display_name,avatar_url)').or('caption.ilike.%'+term+'%,tags.cs.{'+term+'}').order('created_at',{ascending:false}).limit(30);
+ if(error){$('#discoverResults').textContent='Could not search videos: '+error.message;return}
+ discoverPosts=data||[];
+ const results=$('#discoverResults');results.innerHTML='';
+ if(!discoverPosts.length){results.innerHTML='<p class="muted">No videos found. Try another word or hashtag.</p>';return}
+ discoverPosts.forEach((post,index)=>{
+  const card=document.createElement('button');card.type='button';card.className='card';card.style='width:100%;display:flex;gap:12px;align-items:center;text-align:left;color:white;margin:10px 0;padding:10px';
+  const thumb=document.createElement('video');thumb.src=post.video_url;thumb.muted=true;thumb.playsInline=true;thumb.preload='metadata';thumb.style='width:104px;height:138px;object-fit:cover;border-radius:10px;background:#222;flex:0 0 104px';
+  const details=document.createElement('div');details.style='min-width:0';
+  const creator=document.createElement('strong');creator.textContent='@'+(post.profiles?.username||post.profiles?.display_name||'creator');
+  const caption=document.createElement('p');caption.style='margin:7px 0;color:#ddd;overflow-wrap:anywhere';caption.textContent=post.caption||'Video';
+  const tags=document.createElement('small');tags.style='color:var(--gold)';tags.textContent=(post.tags||[]).map(t=>'#'+t).join(' ');
+  const watch=document.createElement('p');watch.style='margin:10px 0 0;color:var(--gold);font-weight:800';watch.textContent='▶  Watch video';
+  details.append(creator,caption,tags,watch);card.append(thumb,details);
+  card.onclick=()=>{
+   posts=discoverPosts.slice();viewingProfileReels=false;showPage('feed');renderFeed();
+   const target=$('#feed').querySelectorAll('.post')[index];
+   if(target){target.scrollIntoView({block:'start'});const video=target.querySelector('video');video.muted=true;video.play().catch(()=>{})}
+  };
+  results.append(card);
+ });
+};
 async function loadProfile(){
  if(!supabase||!user)return;
  const {data:p,error:profileError}=await supabase.from('profiles').select('*').eq('id',user.id).maybeSingle();
