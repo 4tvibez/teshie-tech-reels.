@@ -24,7 +24,7 @@
 #commentsList{overflow:auto;flex:1;padding:8px 0}.comment-item{padding:10px 0;border-bottom:1px solid #292929}.comment-item strong{color:var(--gold);font-size:13px}.comment-item p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}.comment-compose{display:flex;gap:8px;padding-top:10px;border-top:1px solid #333}.comment-compose input{flex:1;min-width:0;background:#080808;border:1px solid #444;border-radius:22px;color:white;padding:12px}
 </style></head><body>
 <section class="welcome" id="welcome"><img class="logo" id="schoolLogo" alt="Teshie Technical Institute logo" src="school-logo.jpg" onerror="this.style.display='none'"><h1>TESHIE TECH REELS</h1><p class="muted">Your school. Your creativity. Your community.</p><button class="gold" id="enter">ENTER REELS</button><p class="muted" style="font-size:11px;margin-top:24px">A community made for creators</p></section>
-<main class="app" id="app"><header class="top"><span class="brand">TTR ✦</span><div class="tabs"><button class="active" data-feed="forYou">For You</button><button data-feed="following">Following</button></div><button id="accountBtn">Sign in</button></header><section id="feed" class="feed"></section><section id="discover" class="page hidden"><h2>Discover</h2><input class="field" id="search" placeholder="Search creators or #hashtags"><div id="discoverResults"></div><h3>Trending tags</h3><div class="row" id="tags"></div></section><section id="activity" class="page hidden"><h2>Activities</h2><div id="activityList" class="card muted">Your likes, follows and comments will appear here.</div></section><section id="profile" class="page hidden"><div id="profileContent"></div></section><section id="upload" class="page hidden"><h2>Upload a video</h2><div class="card"><input id="videoFile" type="file" accept="video/*" class="field"><input id="caption" class="field" maxlength="180" placeholder="Write a caption..."><input id="hashtags" class="field" placeholder="Tags e.g. school, coding, teshie"><button class="gold" id="publish">Publish video</button><p class="muted" id="uploadStatus">Sign in to publish videos to the community.</p></div></section></main>
+<main class="app" id="app"><header class="top"><span class="brand">TTR ✦</span><div class="tabs"><button class="active" data-feed="forYou">For You</button><button data-feed="following">Following</button></div><button id="accountBtn">Sign in</button></header><section id="feed" class="feed"></section><section id="discover" class="page hidden"><h2>Discover</h2><input class="field" id="search" placeholder="Search creators or #hashtags"><div id="discoverResults"></div><h3>Trending tags</h3><div class="row" id="tags"></div></section><section id="activity" class="page hidden"><div class="row" style="justify-content:space-between;align-items:center"><h2>Notifications</h2><button id="refreshActivity">Refresh</button></div><div id="activityList" class="card muted">Your likes, follows and comments will appear here.</div></section><section id="profile" class="page hidden"><div id="profileContent"></div></section><section id="upload" class="page hidden"><h2>Upload a video</h2><div class="card"><input id="videoFile" type="file" accept="video/*" class="field"><input id="caption" class="field" maxlength="180" placeholder="Write a caption..."><input id="hashtags" class="field" placeholder="Tags e.g. school, coding, teshie"><button class="gold" id="publish">Publish video</button><p class="muted" id="uploadStatus">Sign in to publish videos to the community.</p></div></section></main>
 <nav class="nav hidden" id="nav"><button data-page="feed" class="active"><b>⌂</b>Home</button><button data-page="discover"><b>⌕</b>Discover</button><button data-page="upload"><b>＋</b>Upload</button><button data-page="activity"><b>♡</b>Activity</button><button data-page="profile"><b>◉</b>Profile</button></nav>
 <div id="authModal" class="welcome hidden" style="background:#080808"><div class="card" style="width:min(420px,90vw);text-align:left"><h2 id="authTitle">Welcome back</h2><input id="authEmail" class="field" type="email" placeholder="Email"><input id="authPassword" class="field" type="password" placeholder="Password"><input id="authName" class="field" placeholder="Display name (for sign up)"><div class="row"><button class="gold" id="authSubmit">Sign in</button><button id="switchAuth">Create account</button><button id="closeAuth">Close</button></div><button id="forgotPassword" type="button" style="margin-top:10px;background:none;border:0;color:var(--gold);padding:6px 0">Forgot password?</button><p class="muted" id="authMessage"></p></div></div>
 
@@ -197,5 +197,22 @@ async function uploadAvatar(){
  await loadProfile();
  await loadPosts();
 }
-$('#nav button[data-page="profile"]').addEventListener('click',loadProfile);$('#nav button[data-page="activity"]').onclick=async()=>{if(!user){$('#activityList').textContent='Sign in to view your activity.';return}const {data}=await supabase.from('notifications').select('*').eq('recipient_id',user.id).order('created_at',{ascending:false}).limit(30);$('#activityList').innerHTML=(data||[]).map(n=>'<p>'+esc(n.message)+'</p>').join('')||'No activity yet.'};
+$('#nav button[data-page="profile"]').addEventListener('click',loadProfile);
+async function loadActivity(){
+ const list=$('#activityList');
+ if(!user){list.textContent='Sign in to view your notifications.';return}
+ list.textContent='Loading notifications...';
+ const {data,error}=await supabase.from('notifications').select('id,message,created_at,actor_id').eq('recipient_id',user.id).order('created_at',{ascending:false}).limit(50);
+ if(error){list.textContent='Could not load notifications: '+error.message;return}
+ list.innerHTML='';
+ if(!data?.length){list.textContent='No notifications yet. Likes, follows and comments will appear here.';return}
+ data.forEach(n=>{
+  const item=document.createElement('div');item.className='card';item.style='margin:10px 0;padding:13px';
+  const message=document.createElement('p');message.style='margin:0 0 6px';message.textContent=n.message;
+  const time=document.createElement('small');time.className='muted';time.textContent=new Date(n.created_at).toLocaleString();
+  item.append(message,time);list.append(item);
+ });
+}
+$('#nav button[data-page="activity"]').onclick=loadActivity;
+$('#refreshActivity').onclick=loadActivity;
 </script></body></html>
