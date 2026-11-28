@@ -9,7 +9,7 @@
 .post:after{content:"";position:absolute;inset:35% 0 0;z-index:1;pointer-events:none;background:linear-gradient(transparent,rgba(0,0,0,.68))}
 .overlay{z-index:2;bottom:24px;left:14px;right:78px;text-align:left;pointer-events:none}
 .overlay .creator{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:8px}
-.overlay .creator .avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--gold);display:grid;place-items:center;background:#171717;color:var(--gold)}
+.overlay .creator .avatar{width:38px;height:38px;flex:0 0 38px;border-radius:50%;border:1px solid var(--gold);display:grid;place-items:center;background:#171717;color:var(--gold);object-fit:cover}.profile-avatar{width:92px;height:92px;border-radius:50%;object-fit:cover;border:2px solid var(--gold);background:#222}.avatar-placeholder{width:92px;height:92px;border-radius:50%;border:2px solid var(--gold);display:grid;place-items:center;background:#171717;color:var(--gold);font-size:30px}
 .actions{z-index:3;bottom:26px;right:10px;gap:17px}
 .actions button{font-size:25px;text-shadow:0 2px 6px #000;min-width:44px}
 .actions small{font-size:10px;font-weight:600;text-shadow:0 1px 5px #000}
@@ -37,7 +37,7 @@ const $=s=>document.querySelector(s);let user=null,posts=[],mode='signin',curren
 $('#enter').onclick=()=>{$('#welcome').classList.add('hidden');$('#app').style.display='block';$('#nav').classList.remove('hidden');loadPosts();};
 function notify(t){alert(t)}
 async function loadPosts(){if(user){const {data:followRows}=await supabase.from('follows').select('following_id').eq('follower_id',user.id);followingIds=new Set((followRows||[]).map(x=>x.following_id))}else{followingIds=new Set()}if(!supabase){$('#feed').innerHTML='<div class="empty"><h2>Welcome to Teshie Tech Reels</h2><p>Connect Supabase to activate shared videos and accounts.</p><button class="gold" id="loginPrompt">Sign in / Register</button></div>';$('#loginPrompt').onclick=openAuth;return}
-let q=supabase.from('videos').select('id,user_id,video_url,caption,tags,created_at,profiles(id,username,display_name)').order('created_at',{ascending:false});if(currentFeed==='following'&&user){const {data:f}=await supabase.from('follows').select('following_id').eq('follower_id',user.id);q=q.in('user_id',(f||[]).map(x=>x.following_id))}const {data,error}=await q;if(error){$('#feed').innerHTML='<div class="empty">Could not load videos.</div>';return}posts=data||[];renderFeed()}
+let q=supabase.from('videos').select('id,user_id,video_url,caption,tags,created_at,profiles(id,username,display_name,avatar_url)').order('created_at',{ascending:false});if(currentFeed==='following'&&user){const {data:f}=await supabase.from('follows').select('following_id').eq('follower_id',user.id);q=q.in('user_id',(f||[]).map(x=>x.following_id))}const {data,error}=await q;if(error){$('#feed').innerHTML='<div class="empty">Could not load videos.</div>';return}posts=data||[];renderFeed()}
 let feedObserver=null;
 function renderFeed(){
  const f=$('#feed');f.innerHTML='';
@@ -49,7 +49,7 @@ function renderFeed(){
   const v=document.createElement('video');v.src=p.video_url;v.playsInline=true;v.loop=true;v.muted=true;v.volume=1;v.preload='metadata';
   v.setAttribute('webkit-playsinline','');
   const overlay=document.createElement('div');overlay.className='overlay';
-  overlay.innerHTML='<div class="creator"><span class="avatar">✦</span><span>@'+esc(p.profiles?.username||'creator')+'</span></div><p>'+esc(p.caption||'')+'</p><span class="tag">'+(p.tags||[]).map(t=>'#'+esc(t)).join(' ')+'</span>';
+  overlay.innerHTML='<div class="creator">'+(p.profiles?.avatar_url?'<img class="avatar" src="'+esc(p.profiles.avatar_url)+'" alt="Creator photo">':'<span class="avatar">✦</span>')+'<span>@'+esc(p.profiles?.username||'creator')+'</span></div><p>'+esc(p.caption||'')+'</p><span class="tag">'+(p.tags||[]).map(t=>'#'+esc(t)).join(' ')+'</span>';
   const a=document.createElement('div');a.className='actions';
   const saved=JSON.parse(localStorage.getItem('ttr_saved')||'[]').includes(p.id);
   a.innerHTML='<button data-act="like">♡<small>Like</small></button><button data-act="share">↗<small>Share</small></button><button data-act="comments">▤<small>Comments</small></button><button data-act="save">'+(saved?'★':'☆')+'<small>'+(saved?'Saved':'Save')+'</small></button><button data-act="tag">#<small>Tags</small></button>'+(user?.id===p.user_id?'<button data-act="delete">⌫<small>Delete</small></button>':'<button data-act="follow">'+(followingIds.has(p.user_id)?'✓':'＋')+'<small>'+(followingIds.has(p.user_id)?'Following':'Follow')+'</small></button>');
@@ -98,6 +98,39 @@ $('#publish').onclick=async()=>{if(!supabase){notify('Connect Supabase first. Se
 function showPage(page){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));if(page==='feed'){$('#feed').classList.remove('hidden');$('#feed').style.display='block'}else{$('#'+page).classList.remove('hidden');$('#feed').style.display='none'}document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));}
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelectorAll('[data-feed]').forEach(b=>b.onclick=()=>{currentFeed=b.dataset.feed;document.querySelectorAll('[data-feed]').forEach(x=>x.classList.toggle('active',x===b));loadPosts()});
 $('#search').oninput=async()=>{if(!supabase)return;const term=$('#search').value.replace(/^#/,'');const {data}=await supabase.from('videos').select('id,caption,tags,video_url,profiles(username)').or('caption.ilike.%'+term+'%,tags.cs.{'+term+'}').limit(20);$('#discoverResults').innerHTML=(data||[]).map(x=>'<div class="card">@'+esc(x.profiles?.username||'creator')+' — '+esc(x.caption||'')+'</div>').join('')||'<p class="muted">No matches</p>'};
-async function loadProfile(){if(!supabase||!user)return;const {data:p}=await supabase.from('profiles').select('*').eq('id',user.id).maybeSingle();const {count}=await supabase.from('videos').select('*',{count:'exact',head:true}).eq('user_id',user.id);$('#profileContent').innerHTML='<h2>'+(esc(p?.display_name||user.email))+'</h2><p class="muted">@'+esc(p?.username||'newcreator')+'</p><p>'+(count||0)+' videos</p><button class="gold" id="logout">Log out</button><div class="videoGrid" id="myVideos"></div>';$('#logout').onclick=async()=>{await supabase.auth.signOut();user=null;viewingProfileReels=false;$('#accountBtn').textContent='Sign in';loadPosts();showPage('feed')};const {data:v,error}=await supabase.from('videos').select('id,video_url,caption,tags,created_at,profiles(username,display_name)').eq('user_id',user.id).order('created_at',{ascending:false});const grid=$('#myVideos');if(error){grid.textContent='Could not load your videos.';return}grid.innerHTML=(v||[]).map((x,i)=>'<button class="profile-tile" data-video-index="'+i+'"><video src="'+x.video_url+'" muted playsinline preload="metadata"></video><span>▶</span></button>').join('');grid.querySelectorAll('[data-video-index]').forEach(btn=>btn.onclick=()=>{posts=v;viewingProfileReels=true;showPage('feed');renderFeed();const index=Number(btn.dataset.videoIndex);const target=$('#feed').querySelectorAll('.post')[index];if(target){target.scrollIntoView({block:'start'});const video=target.querySelector('video');video.muted=true;video.play().catch(()=>{})}})}
+async function loadProfile(){
+ if(!supabase||!user)return;
+ const {data:p,error:profileError}=await supabase.from('profiles').select('*').eq('id',user.id).maybeSingle();
+ if(profileError){$('#profileContent').textContent='Could not load your profile: '+profileError.message;return}
+ const {count}=await supabase.from('videos').select('*',{count:'exact',head:true}).eq('user_id',user.id);
+ const avatar=p?.avatar_url?'<img class="profile-avatar" src="'+esc(p.avatar_url)+'" alt="Your profile photo or logo">':'<div class="avatar-placeholder">✦</div>';
+ $('#profileContent').innerHTML='<div class="card" style="text-align:center"><div style="display:flex;justify-content:center;margin-bottom:12px">'+avatar+'</div><h2>'+(esc(p?.display_name||user.email))+'</h2><p class="muted">@'+esc(p?.username||'newcreator')+'</p><p>'+(count||0)+' videos</p><label class="gold" for="avatarFile" style="display:inline-block;cursor:pointer">Choose photo or logo</label><input id="avatarFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="field" style="margin-top:14px"><button class="gold" id="uploadAvatar" style="margin-top:8px">Save profile photo</button><p class="muted" id="avatarStatus">JPG, PNG, WEBP or GIF. Maximum 5 MB.</p></div><button class="gold" id="logout">Log out</button><div class="videoGrid" id="myVideos"></div>';
+ $('#uploadAvatar').onclick=uploadAvatar;
+ $('#logout').onclick=async()=>{await supabase.auth.signOut();user=null;viewingProfileReels=false;$('#accountBtn').textContent='Sign in';loadPosts();showPage('feed')};
+ const {data:v,error}=await supabase.from('videos').select('id,video_url,caption,tags,created_at,profiles(username,display_name)').eq('user_id',user.id).order('created_at',{ascending:false});
+ const grid=$('#myVideos');if(error){grid.textContent='Could not load your videos.';return}
+ grid.innerHTML=(v||[]).map((x,i)=>'<button class="profile-tile" data-video-index="'+i+'"><video src="'+x.video_url+'" muted playsinline preload="metadata"></video><span>▶</span></button>').join('');
+ grid.querySelectorAll('[data-video-index]').forEach(btn=>btn.onclick=()=>{posts=v;viewingProfileReels=true;showPage('feed');renderFeed();const index=Number(btn.dataset.videoIndex);const target=$('#feed').querySelectorAll('.post')[index];if(target){target.scrollIntoView({block:'start'});const video=target.querySelector('video');video.muted=true;video.play().catch(()=>{})}});
+}
+async function uploadAvatar(){
+ if(!user){openAuth();return}
+ const file=$('#avatarFile')?.files?.[0];const status=$('#avatarStatus');const btn=$('#uploadAvatar');
+ if(!file){status.textContent='Choose a photo or logo first.';return}
+ if(!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)){status.textContent='Please choose a JPG, PNG, WEBP or GIF image.';return}
+ if(file.size>5*1024*1024){status.textContent='That image is larger than 5 MB. Choose a smaller image.';return}
+ btn.disabled=true;status.textContent='Uploading your profile image...';
+ const ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif' })[file.type];
+ const path=user.id+'/profile.'+ext;
+ const {error:uploadError}=await supabase.storage.from('avatars').upload(path,file,{upsert:true,contentType:file.type,cacheControl:'3600'});
+ if(uploadError){status.textContent='Upload failed: '+uploadError.message;btn.disabled=false;return}
+ const {data:publicData}=supabase.storage.from('avatars').getPublicUrl(path);
+ const avatarUrl=publicData.publicUrl+'?v='+Date.now();
+ const {error:updateError}=await supabase.from('profiles').update({avatar_url:avatarUrl}).eq('id',user.id);
+ btn.disabled=false;
+ if(updateError){status.textContent='Image uploaded, but profile update failed: '+updateError.message;return}
+ status.textContent='Profile photo or logo saved!';
+ await loadProfile();
+ await loadPosts();
+}
 $('#nav button[data-page="profile"]').addEventListener('click',loadProfile);$('#nav button[data-page="activity"]').onclick=async()=>{if(!user){$('#activityList').textContent='Sign in to view your activity.';return}const {data}=await supabase.from('notifications').select('*').eq('recipient_id',user.id).order('created_at',{ascending:false}).limit(30);$('#activityList').innerHTML=(data||[]).map(n=>'<p>'+esc(n.message)+'</p>').join('')||'No activity yet.'};
 </script></body></html>
