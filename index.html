@@ -98,16 +98,14 @@ $('#publish').onclick=async()=>{if(!supabase){notify('Connect Supabase first. Se
 function showPage(page){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));if(page==='feed'){$('#feed').classList.remove('hidden');$('#feed').style.display='block'}else{$('#'+page).classList.remove('hidden');$('#feed').style.display='none'}document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));}
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelectorAll('[data-feed]').forEach(b=>b.onclick=()=>{currentFeed=b.dataset.feed;document.querySelectorAll('[data-feed]').forEach(x=>x.classList.toggle('active',x===b));loadPosts()});
 let discoverPosts=[];
-$('#search').oninput=async()=>{
- if(!supabase)return;
- const term=$('#search').value.trim().replace(/^#/,'');
- if(!term){discoverPosts=[];$('#discoverResults').innerHTML='<p class="muted">Search for creators, captions or hashtags to find videos.</p>';return}
- $('#discoverResults').innerHTML='<p class="muted">Searching videos...</p>';
- const {data,error}=await supabase.from('videos').select('id,user_id,video_url,caption,tags,created_at,profiles(id,username,display_name,avatar_url)').or('caption.ilike.%'+term+'%,tags.cs.{'+term+'}').order('created_at',{ascending:false}).limit(30);
- if(error){$('#discoverResults').textContent='Could not search videos: '+error.message;return}
- discoverPosts=data||[];
- const results=$('#discoverResults');results.innerHTML='';
- if(!discoverPosts.length){results.innerHTML='<p class="muted">No videos found. Try another word or hashtag.</p>';return}
+function renderDiscoverVideos(list){
+ discoverPosts=list||[];
+ const results=$('#discoverResults');
+ const old=results.querySelector('#discoverVideoResults');
+ if(old)old.remove();
+ const section=document.createElement('div');section.id='discoverVideoResults';
+ const heading=document.createElement('h3');heading.textContent='Videos';section.append(heading);
+ if(!discoverPosts.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='No videos found for this search.';section.append(empty);results.append(section);return}
  discoverPosts.forEach((post,index)=>{
   const card=document.createElement('button');card.type='button';card.className='card';card.style='width:100%;display:flex;gap:12px;align-items:center;text-align:left;color:white;margin:10px 0;padding:10px';
   const thumb=document.createElement('video');thumb.src=post.video_url;thumb.muted=true;thumb.playsInline=true;thumb.preload='metadata';thumb.style='width:104px;height:138px;object-fit:cover;border-radius:10px;background:#222;flex:0 0 104px';
@@ -122,8 +120,47 @@ $('#search').oninput=async()=>{
    const target=$('#feed').querySelectorAll('.post')[index];
    if(target){target.scrollIntoView({block:'start'});const video=target.querySelector('video');video.muted=true;video.play().catch(()=>{})}
   };
-  results.append(card);
+  section.append(card);
  });
+ results.append(section);
+}
+$('#search').oninput=async()=>{
+ if(!supabase)return;
+ const term=$('#search').value.trim().replace(/^#/,'').replace(/[(),]/g,' ').trim();
+ const results=$('#discoverResults');
+ if(!term){discoverPosts=[];results.innerHTML='<p class="muted">Search for creators, captions or hashtags to find videos.</p>';return}
+ results.innerHTML='<p class="muted">Searching creators and videos...</p>';
+ const [people,videos]=await Promise.all([
+  supabase.from('profiles').select('id,username,display_name,avatar_url').or('username.ilike.%'+term+'%,display_name.ilike.%'+term+'%').limit(20),
+  supabase.from('videos').select('id,user_id,video_url,caption,tags,created_at,profiles(id,username,display_name,avatar_url)').or('caption.ilike.%'+term+'%,tags.cs.{'+term+'}').order('created_at',{ascending:false}).limit(30)
+ ]);
+ if(people.error&&videos.error){results.textContent='Search failed: '+people.error.message;return}
+ results.innerHTML='';
+ const users=people.data||[];
+ if(users.length){
+  const heading=document.createElement('h3');heading.textContent='Creators';results.append(heading);
+  users.forEach(person=>{
+   const card=document.createElement('button');card.type='button';card.className='card';card.style='width:100%;display:flex;gap:12px;align-items:center;text-align:left;color:white;margin:8px 0;padding:12px';
+   if(person.avatar_url){const avatar=document.createElement('img');avatar.src=person.avatar_url;avatar.alt='';avatar.style='width:48px;height:48px;border-radius:50%;object-fit:cover';card.append(avatar)}
+   const info=document.createElement('span');info.style='display:block;min-width:0';
+   const name=document.createElement('strong');name.textContent=person.display_name||person.username||'Creator';
+   const handle=document.createElement('small');handle.className='muted';handle.style='display:block';handle.textContent='@'+(person.username||'creator')+' · View videos';
+   info.append(name,handle);card.append(info);
+   card.onclick=async()=>{
+    results.innerHTML='<p class="muted">Loading videos from @'+(person.username||'creator')+'...</p>';
+    const {data,error}=await supabase.from('videos').select('id,user_id,video_url,caption,tags,created_at,profiles(id,username,display_name,avatar_url)').eq('user_id',person.id).order('created_at',{ascending:false}).limit(30);
+    if(error){results.textContent='Could not load this creator: '+error.message;return}
+    results.innerHTML='';
+    const back=document.createElement('button');back.textContent='← Back to search results';back.onclick=()=>$('#search').dispatchEvent(new Event('input'));results.append(back);
+    const title=document.createElement('h3');title.textContent=(person.display_name||person.username||'Creator')+' videos';results.append(title);
+    renderDiscoverVideos(data||[]);
+   };
+   results.append(card);
+  });
+ }else{
+  const noPeople=document.createElement('p');noPeople.className='muted';noPeople.textContent='No creators matched this search.';results.append(noPeople);
+ }
+ if(videos.error){const err=document.createElement('p');err.className='muted';err.textContent='Video search unavailable: '+videos.error.message;results.append(err)}else renderDiscoverVideos(videos.data||[]);
 };
 async function loadProfile(){
  if(!supabase||!user)return;
