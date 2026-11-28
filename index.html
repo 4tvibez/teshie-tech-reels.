@@ -213,6 +213,6 @@ async function loadActivity(){
   item.append(message,time);list.append(item);
  });
 }
-$('#nav button[data-page="activity"]').onclick=loadActivity;
+$('#nav button[data-page="activity"]').addEventListener('click',loadActivity);
 $('#refreshActivity').onclick=loadActivity;
 </script></body></html>
