@@ -111,3 +111,50 @@ drop policy if exists "users delete own avatar" on storage.objects;
 create policy "users delete own avatar" on storage.objects
 for delete to authenticated
 using(bucket_id='avatars' and (storage.foldername(name))[1]=auth.uid()::text);
+
+
+-- Threaded comment replies
+alter table public.comments
+ add column if not exists parent_comment_id uuid
+ references public.comments(id) on delete cascade;
+
+create index if not exists comments_parent_created_idx
+ on public.comments(parent_comment_id, created_at);
+
+create or replace function public.notify_comment_reply()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+declare
+ parent_author uuid;
+ parent_video uuid;
+begin
+ if new.parent_comment_id is null then
+  return new;
+ end if;
+
+ select user_id, video_id
+ into parent_author, parent_video
+ from public.comments
+ where id = new.parent_comment_id;
+
+ if parent_author is not null
+    and parent_video = new.video_id
+    and parent_author <> new.user_id then
+  insert into public.notifications(recipient_id, actor_id, message)
+  values(
+   parent_author,
+   new.user_id,
+   'replied to your comment: "' || left(new.content, 300) || '" 💬'
+  );
+ end if;
+ return new;
+end;
+$$;
+
+drop trigger if exists on_comment_reply_created on public.comments;
+create trigger on_comment_reply_created
+ after insert on public.comments
+ for each row execute function public.notify_comment_reply();
