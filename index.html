@@ -21,7 +21,8 @@
 
 #commentsModal{position:fixed;inset:0;z-index:20;background:#000b;display:flex;align-items:flex-end;justify-content:center}
 #commentsModal .comments-sheet{width:min(560px,100%);height:min(72dvh,680px);background:#151515;border:1px solid #333;border-radius:20px 20px 0 0;padding:16px;display:flex;flex-direction:column}
-#commentsList{overflow:auto;flex:1;padding:8px 0}.comment-item{padding:10px 0;border-bottom:1px solid #292929}.comment-item strong{color:var(--gold);font-size:13px}.comment-item p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}.comment-compose{display:flex;gap:8px;padding-top:10px;border-top:1px solid #333}.comment-compose input{flex:1;min-width:0;background:#080808;border:1px solid #444;border-radius:22px;color:white;padding:12px}
+#commentsList{overflow:auto;flex:1;padding:8px 0}.comment-item{padding:10px 0;border-bottom:1px solid #292929}.comment-item strong{color:var(--gold);font-size:13px}.comment-item p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.comment-replies{margin:8px 0 0 14px;padding-left:12px;border-left:2px solid #3a3323}.comment-reply{padding:8px 0;border-bottom:1px solid #292929}.comment-tools{display:flex;gap:14px;align-items:center;margin-top:5px}.comment-tools button{color:var(--gold);font-size:12px;font-weight:700}.replying-label{color:var(--gold);font-size:12px;padding:4px 8px 0}.comment-compose{display:flex;gap:8px;padding-top:10px;border-top:1px solid #333}.comment-compose input{flex:1;min-width:0;background:#080808;border:1px solid #444;border-radius:22px;color:white;padding:12px}
 </style></head><body>
 <section class="welcome" id="welcome"><img class="logo" id="schoolLogo" alt="Teshie Technical Institute logo" src="school-logo.jpg" onerror="this.style.display='none'"><h1>TESHIE TECH REELS</h1><p class="muted">Your school. Your creativity. Your community.</p><button class="gold" id="enter">ENTER REELS</button><p class="muted" style="font-size:11px;margin-top:24px">A community made for creators</p></section>
 <main class="app" id="app"><header class="top"><span class="brand">TTR ✦</span><div class="tabs"><button class="active" data-feed="forYou">For You</button><button data-feed="following">Following</button></div><button id="accountBtn">Sign in</button></header><section id="feed" class="feed"></section><section id="discover" class="page hidden"><h2>Discover</h2><input class="field" id="search" placeholder="Search creators or #hashtags"><div id="discoverResults"></div><h3>Trending tags</h3><div class="row" id="tags"></div></section><section id="activity" class="page hidden"><div class="row" style="justify-content:space-between;align-items:center"><h2>Notifications</h2><button id="refreshActivity">Refresh</button></div><div id="activityList" class="card muted">Your likes, follows and comments will appear here.</div></section><section id="profile" class="page hidden"><div id="profileContent"></div></section><section id="upload" class="page hidden"><h2>Upload a video</h2><div class="card"><input id="videoFile" type="file" accept="video/*" class="field"><input id="caption" class="field" maxlength="180" placeholder="Write a caption..."><input id="hashtags" class="field" placeholder="Tags e.g. school, coding, teshie"><button class="gold" id="publish">Publish video</button><p class="muted" id="uploadStatus">Sign in to publish videos to the community.</p></div></section></main>
@@ -67,26 +68,62 @@ function renderFeed(){
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function action(e,p){const b=e.target.closest('button');if(!b)return;const act=b.dataset.act;if(!user&&['like','delete','follow'].includes(act)){openAuth();return}if(act==='comments'){openComments(p);return}if(act==='like'){const {data:old}=await supabase.from('likes').select('id').eq('video_id',p.id).eq('user_id',user.id).maybeSingle();if(old)await supabase.from('likes').delete().eq('id',old.id);else await supabase.from('likes').insert({video_id:p.id,user_id:user.id});b.firstChild.textContent=old?'♡':'♥'}if(act==='share'){if(navigator.share)await navigator.share({title:'Teshie Tech Reels',url:p.video_url});else{await navigator.clipboard.writeText(p.video_url);notify('Video link copied')}}if(act==='download'){const a=document.createElement('a');a.href=p.video_url;a.download='teshie-reel.mp4';a.target='_blank';a.click()}if(act==='save'){let saved=JSON.parse(localStorage.getItem('ttr_saved')||'[]');if(saved.includes(p.id)){saved=saved.filter(id=>id!==p.id);b.innerHTML='☆<small>Save</small>'}else{saved.push(p.id);b.innerHTML='★<small>Saved</small>'}localStorage.setItem('ttr_saved',JSON.stringify(saved));notify(saved.includes(p.id)?'Added to saved videos':'Removed from saved videos')}if(act==='tag')notify((p.tags||[]).map(t=>'#'+t).join(' ')||'No tags');if(act==='delete'&&confirm('Delete this video?')){const {error}=await supabase.from('videos').delete().eq('id',p.id);if(error)notify(error.message);else loadPosts()}if(act==='follow'){if(!user?.id){openAuth();return}const creatorId=p.user_id||p.profiles?.id;if(!creatorId){notify('This video is missing its creator profile. It cannot be followed until its owner is linked.');return}if(creatorId===user.id){notify('You cannot follow your own account.');return}const alreadyFollowing=followingIds.has(creatorId);const result=alreadyFollowing?await supabase.from('follows').delete().eq('follower_id',user.id).eq('following_id',creatorId):await supabase.from('follows').upsert({follower_id:user.id,following_id:creatorId},{onConflict:'follower_id,following_id',ignoreDuplicates:true});if(result.error){notify('Follow failed: '+result.error.message+' (code '+(result.error.code||'unknown')+').');return}if(alreadyFollowing)followingIds.delete(creatorId);else followingIds.add(creatorId);b.innerHTML=(alreadyFollowing?'＋':'✓')+'<small>'+(alreadyFollowing?'Follow':'Following')+'</small>';if(currentFeed==='following')await loadPosts();} }
 
-let activeCommentVideo=null;
-$('#closeComments').onclick=()=>$('#commentsModal').classList.add('hidden');
+let activeCommentVideo=null,replyToComment=null;
+$('#closeComments').onclick=()=>{ $('#commentsModal').classList.add('hidden');replyToComment=null; };
+function setReplyTarget(comment){
+ replyToComment=comment;
+ const label=$('#replyingLabel');
+ if(label)label.remove();
+ if(comment){
+  const note=document.createElement('div');note.id='replyingLabel';note.className='replying-label';
+  note.textContent='Replying to @'+(comment.profiles?.username||comment.profiles?.display_name||'user')+' · Cancel';
+  note.onclick=()=>{replyToComment=null;note.remove();$('#commentInput').placeholder='Add a comment...'};
+  $('#commentInput').placeholder='Write a reply...';
+  $('#commentInput').parentElement.before(note);
+ }else $('#commentInput').placeholder='Add a comment...';
+}
 async function openComments(p){
  if(!supabase){notify('Comments need the Supabase connection.');return}
- activeCommentVideo=p;$('#commentsModal').classList.remove('hidden');$('#commentsTitle').textContent='Comments';$('#commentsList').textContent='Loading comments...';$('#commentInput').value='';
- const {data,error}=await supabase.from('comments').select('id,content,created_at,user_id,profiles(username,display_name)').eq('video_id',p.id).order('created_at',{ascending:true});
+ activeCommentVideo=p;replyToComment=null;$('#commentsModal').classList.remove('hidden');$('#commentsTitle').textContent='Comments';$('#commentsList').textContent='Loading comments...';$('#commentInput').value='';$('#commentInput').placeholder='Add a comment...';
+ const {data,error}=await supabase.from('comments').select('id,content,created_at,user_id,parent_comment_id,profiles(username,display_name)').eq('video_id',p.id).order('created_at',{ascending:true});
  const list=$('#commentsList');list.innerHTML='';
- if(error){list.textContent='Could not load comments. Check that the comments table has been created in Supabase.';return}
+ if(error){list.textContent='Could not load comments. Please make sure the reply database update has been run.';return}
  if(!data?.length){list.textContent='No comments yet. Be the first to comment!';return}
- data.forEach(c=>{const item=document.createElement('div');item.className='comment-item';const name=document.createElement('strong');name.textContent='@'+(c.profiles?.username||c.profiles?.display_name||'user');const body=document.createElement('p');body.textContent=c.content;item.append(name,body);list.append(item)});
+ const roots=data.filter(c=>!c.parent_comment_id);
+ roots.forEach(c=>{
+  const item=document.createElement('div');item.className='comment-item';
+  const name=document.createElement('strong');name.textContent='@'+(c.profiles?.username||c.profiles?.display_name||'user');
+  const body=document.createElement('p');body.textContent=c.content;
+  const tools=document.createElement('div');tools.className='comment-tools';
+  const reply=document.createElement('button');reply.type='button';reply.textContent='Reply';reply.onclick=()=>{setReplyTarget(c);$('#commentInput').focus()};
+  const replies=data.filter(x=>x.parent_comment_id===c.id);
+  const count=document.createElement('small');count.className='muted';count.textContent=replies.length?replies.length+' '+(replies.length===1?'reply':'replies'):'';
+  tools.append(reply,count);item.append(name,body,tools);
+  if(replies.length){
+   const nested=document.createElement('div');nested.className='comment-replies';
+   replies.forEach(replyRow=>{
+    const row=document.createElement('div');row.className='comment-reply';
+    const replyName=document.createElement('strong');replyName.textContent='@'+(replyRow.profiles?.username||replyRow.profiles?.display_name||'user');
+    const replyBody=document.createElement('p');replyBody.textContent=replyRow.content;
+    row.append(replyName,replyBody);nested.append(row);
+   });
+   item.append(nested);
+  }
+  list.append(item);
+ });
+ if(!roots.length){list.textContent='No top-level comments yet.'}
  list.scrollTop=list.scrollHeight;
 }
 $('#sendComment').onclick=async()=>{
  const content=$('#commentInput').value.trim();if(!content||!activeCommentVideo)return;
  if(!user){openAuth();return}
  const btn=$('#sendComment');btn.disabled=true;
- const {error}=await supabase.from('comments').insert({video_id:activeCommentVideo.id,user_id:user.id,content});
+ const row={video_id:activeCommentVideo.id,user_id:user.id,content};
+ if(replyToComment)row.parent_comment_id=replyToComment.id;
+ const {error}=await supabase.from('comments').insert(row);
  btn.disabled=false;
- if(error){notify('Could not post comment: '+error.message);return}
- $('#commentInput').value='';await openComments(activeCommentVideo);
+ if(error){notify('Could not post '+(replyToComment?'reply':'comment')+': '+error.message);return}
+ $('#commentInput').value='';replyToComment=null;const label=$('#replyingLabel');if(label)label.remove();$('#commentInput').placeholder='Add a comment...';await openComments(activeCommentVideo);
 };
 $('#commentInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#sendComment').click()});
 
